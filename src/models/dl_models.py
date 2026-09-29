@@ -19,7 +19,7 @@ def seed_everything(seed=42):
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+        torch.cuda.manual_seed_all(seed) 
 
 
 def calculate_metrics(y_true_n44, y_true_n70, y_pred_n44, y_pred_n70):
