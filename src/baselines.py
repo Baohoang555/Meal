@@ -1,4 +1,6 @@
 import os
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 
@@ -13,7 +15,7 @@ class PureNumpyRidge:
     """Ridge Regression giải tích thuần NumPy: w = (X^T X + alpha*I)^(-1) X^T y"""
     def __init__(self, alpha=1.0):
         self.alpha = alpha
-        self.w = None
+        self.w: Optional[np.ndarray] = None
         self.intercept = 0.0
 
     def fit(self, X, y):
@@ -35,6 +37,8 @@ class PureNumpyRidge:
         return self
 
     def predict(self, X):
+        if self.w is None:
+            raise RuntimeError("Mô hình Ridge chưa được fit.")
         X = np.asarray(X, dtype=np.float64)
         return X @ self.w + self.intercept
 
@@ -127,7 +131,12 @@ def calculate_metrics(y_true_n44, y_true_n70, y_pred_n44, y_pred_n70):
 
     mae_cost = np.mean(np.abs(cost_true - cost_pred))
     rmse_cost = np.sqrt(np.mean((cost_true - cost_pred) ** 2))
-    wape_cost = np.sum(np.abs(cost_true - cost_pred)) / np.sum(cost_true) * 100
+    total_cost = np.sum(cost_true)
+    wape_cost = (
+        np.sum(np.abs(cost_true - cost_pred)) / total_cost * 100
+        if total_cost > 0
+        else 0.0
+    )
 
     mae_n44 = np.mean(np.abs(y_true_n44 - y_pred_n44))
     mae_n70 = np.mean(np.abs(y_true_n70 - y_pred_n70))

@@ -199,10 +199,37 @@ project/
 ├── README.md
 └── requirements.txt
 ```
+"""
+$ErrorActionPreference = "Stop"
+$env:PYTHONIOENCODING = "utf-8"
 
-## 13. Việc cần làm tiếp theo
+Set-Location "C:\Users\cris\CS\Meal"
 
-1. Khảo sát cột dữ liệu và số dòng thực tế của log check-in.
-2. Làm sạch dữ liệu & dựng lưới nhân viên × ngày (Bước 1).
-3. EDA để kiểm chứng các giả thuyết hành vi (ví dụ: tỷ lệ chọn món Âu theo thứ trong tuần) trước khi đưa vào đặc trưng.
-4. Triển khai lần lượt theo pipeline ở mục 4.
+python "src\data_cleaning.py" `
+    --input "data\raw\MealHistory_UTF8.csv" `
+    --output "data\processed\daily_grid.parquet" `
+    --removed-log "data\processed\removed_rows.csv"
+
+python "src\monthly_aggregation.py" `
+    --grid "data\processed\daily_grid.parquet" `
+    --output "data\processed\monthly_dataset.parquet"
+
+python "src\feature_engineering.py"
+
+python "src\check_monthly_history.py"
+
+python "src\eda.py" `
+    --raw-log "data\raw\MealHistory_UTF8.csv" `
+    --grid "data\processed\daily_grid.parquet" `
+    --output-dir "results"
+
+python "src\baselines.py"
+
+python "src\models\ml_models.py"
+
+python "src\models\dl_models.py"
+
+python "src\ensemble.py"
+
+python "src\evaluate.py"
+"""

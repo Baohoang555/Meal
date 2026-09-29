@@ -31,7 +31,12 @@ def calculate_metrics(y_true_n44, y_true_n70, y_pred_n44, y_pred_n70):
 
     mae_cost = np.mean(np.abs(cost_true - cost_pred))
     rmse_cost = np.sqrt(np.mean((cost_true - cost_pred) ** 2))
-    wape_cost = np.sum(np.abs(cost_true - cost_pred)) / np.sum(cost_true) * 100
+    total_cost = np.sum(cost_true)
+    wape_cost = (
+        np.sum(np.abs(cost_true - cost_pred)) / total_cost * 100
+        if total_cost > 0
+        else 0.0
+    )
 
     mae_n44 = np.mean(np.abs(y_true_n44 - y_pred_n44))
     mae_n70 = np.mean(np.abs(y_true_n70 - y_pred_n70))

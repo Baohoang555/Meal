@@ -70,14 +70,14 @@ def section_day_of_week(grid: pd.DataFrame, output_dir: Path, report: list):
     rate = tmp.groupby("dow")["has_checkin"].mean().reindex(range(7))
 
     fig, ax = plt.subplots(figsize=(7, 4))
-    ax.bar(WEEKDAY_NAMES_VI, rate.values)
+    ax.bar(WEEKDAY_NAMES_VI, rate.to_numpy(dtype=float))
     ax.set_ylabel("Tỷ lệ có ăn")
     ax.set_title("Tỷ lệ có ăn theo thứ trong tuần")
     ax.set_ylim(0, 1)
     path = _savefig(fig, output_dir, "ty_le_an_theo_thu")
 
     report.append("## 2. Tỷ lệ có ăn theo thứ trong tuần")
-    for name, val in zip(WEEKDAY_NAMES_VI, rate.values):
+    for name, val in zip(WEEKDAY_NAMES_VI, rate.to_numpy(dtype=float)):
         report.append(f"- {name}: {val:.1%}")
     report.append(f"\n![Tỷ lệ ăn theo thứ]({path.relative_to(output_dir)})\n")
     report.append(
@@ -97,7 +97,11 @@ def section_meal_type(clean: pd.DataFrame, output_dir: Path, report: list):
     overall = clean["meal_type"].value_counts(normalize=True)
 
     fig, ax = plt.subplots(figsize=(5, 4))
-    ax.bar(overall.index, overall.values, color=["#4C72B0", "#55A868", "#C44E52"])
+    ax.bar(
+        overall.index.astype(str).tolist(),
+        overall.to_numpy(dtype=float),
+        color=["#4C72B0", "#55A868", "#C44E52"],
+    )
     ax.set_ylabel("Tỷ lệ")
     ax.set_title("Tỷ lệ chọn món (toàn bộ dữ liệu)")
     path1 = _savefig(fig, output_dir, "ty_le_mon_tong_the")
@@ -143,7 +147,12 @@ def section_hour_by_shift(clean: pd.DataFrame, output_dir: Path, report: list):
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for shift_label, sub in tmp.groupby("shift_label"):
-        ax.hist(sub["hour"], bins=range(0, 25), alpha=0.6, label=shift_label)
+        ax.hist(
+            sub["hour"].to_numpy(dtype=float),
+            bins=range(0, 25),
+            alpha=0.6,
+            label=str(shift_label),
+        )
     ax.set_xlabel("Giờ trong ngày")
     ax.set_ylabel("Số lượt ăn")
     ax.set_title("Phân phối giờ ăn theo ca")
@@ -256,8 +265,7 @@ def section_price_qa(clean: pd.DataFrame, report: list):
 # HÀM CHẠY CHÍNH
 # ----------------------------------------------------------------------
 
-def run(raw_log_path: str, grid_path: str, output_dir: str):
-    output_dir = Path(output_dir)
+def run(raw_log_path: str, grid_path: str, output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     raw = load_raw_log(raw_log_path)
@@ -292,4 +300,4 @@ if __name__ == "__main__":
     parser.add_argument("--output-dir", default="results")
     args = parser.parse_args()
 
-    run(args.raw_log, args.grid, args.output_dir)
+    run(args.raw_log, args.grid, Path(args.output_dir))

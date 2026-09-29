@@ -1,13 +1,16 @@
 import numpy as np
 import pandas as pd
 
+from data_cleaning import PUBLIC_HOLIDAYS
+
 
 def get_working_days_in_month(period: pd.Period) -> int:
-    """Đếm số ngày làm việc (Thứ 2 đến Thứ 6) trong tháng."""
+    """Đếm ngày làm việc, không tính cuối tuần và ngày lễ đã cấu hình."""
     start_date = period.start_time.date()
     end_date = period.end_time.date()
     bus_days = pd.bdate_range(start=start_date, end=end_date)
-    return len(bus_days)
+    holidays = pd.DatetimeIndex(PUBLIC_HOLIDAYS).normalize()
+    return int((~bus_days.normalize().isin(holidays)).sum())
 
 
 def build_features(
@@ -61,6 +64,10 @@ def build_features(
         df["N70_lag_1"] / (df["total_meals_lag_1"] + 1e-5)
     ).clip(0, 1).fillna(0)
 
+    # Không dùng au_share của chính tháng hiện tại làm feature: nó được tính
+    # từ N70 của target và sẽ làm rò rỉ nhãn vào mô hình.
+    df.drop(columns=["au_share"], inplace=True, errors="ignore")
+
     # 4. TARGET ENCODING EXPANDING (Theo phòng ban - Tránh rò rỉ dữ liệu)
     if "department" in df.columns:
         df["dept_enc_n44"] = 0.0
@@ -75,12 +82,20 @@ def build_features(
                 df.loc[cur_idx, "dept_enc_n44"] = m_dept.map(dept_means["N44"]).fillna(past_data["N44"].mean())
                 df.loc[cur_idx, "dept_enc_n70"] = m_dept.map(dept_means["N70"]).fillna(past_data["N70"].mean())
 
-    # 5. LỌC BỎ 3 THÁNG KHỞI TẠO LAG
-    df_features = df[df["month"] >= "2025-10"].copy().reset_index(drop=True)
+    # 5. Chỉ giữ các dòng có đủ 3 tháng lịch sử; không hard-code ngày tháng
+    # để pipeline vẫn đúng khi dữ liệu được cập nhật hoặc đổi khoảng thời gian.
+    required_history = [
+        f"{col}_lag_{lag}"
+        for col in ["N44", "N70", "total_meals", "days_with_meal", "total_amount"]
+        for lag in [1, 2, 3]
+    ]
+    df_features = df[df[required_history].notna().all(axis=1)].copy()
+    df_features = df_features.reset_index(drop=True)
 
     print(f"Bảng đặc trưng hoàn chỉnh: {df_features.shape[0]:,} dòng × {df_features.shape[1]} cột")
     df_features.to_parquet(output_path, index=False)
     print(f"Đã lưu tại: {output_path}")
+    return df_features
 
 
 if __name__ == "__main__":

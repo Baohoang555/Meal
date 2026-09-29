@@ -26,27 +26,35 @@ def run_evaluation():
     models = ["m1", "m2", "m3", "m4", "m5"]
     months = sorted(df["month"].unique())
 
-    # Tính toán dự đoán của S2 (Convex Ensemble) cho từng tháng test
+    # Tính toán S2 theo walk-forward: trọng số chỉ được học từ các tháng trước.
     df["pred_n44_s2"] = 0.0
     df["pred_n70_s2"] = 0.0
 
     for m in months:
         idx = df[df["month"] == m].index
         sub = df.loc[idx]
-        y_cost = sub["N44"].values * PRICE_44 + sub["N70"].values * PRICE_70
 
-        cost_matrix = np.column_stack([
-            sub[f"{mod}_p44"].values * PRICE_44 + sub[f"{mod}_p70"].values * PRICE_70
-            for mod in models
-        ])
+        prior = df[df["month"] < m]
+        if prior.empty:
+            w = np.full(len(models), 1.0 / len(models))
+        else:
+            prior_matrix = np.column_stack([
+                prior[f"{mod}_p44"].values * PRICE_44 + prior[f"{mod}_p70"].values * PRICE_70
+                for mod in models
+            ])
+            prior_cost = prior["N44"].values * PRICE_44 + prior["N70"].values * PRICE_70
 
-        def loss_multi(w):
-            return np.mean(np.abs(y_cost - cost_matrix @ w))
+            def loss_multi(weights):
+                return np.mean(np.abs(prior_cost - prior_matrix @ weights))
 
-        cons = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
-        bounds = [(0.0, 1.0) for _ in range(5)]
-        opt_s2 = minimize(loss_multi, [0.2] * 5, method="SLSQP", bounds=bounds, constraints=cons)
-        w = opt_s2.x
+            opt_s2 = minimize(
+                loss_multi,
+                np.full(len(models), 1.0 / len(models)),
+                method="SLSQP",
+                bounds=[(0.0, 1.0)] * len(models),
+                constraints={"type": "eq", "fun": lambda weights: np.sum(weights) - 1.0},
+            )
+            w = opt_s2.x if opt_s2.success else np.full(len(models), 1.0 / len(models))
 
         df.loc[idx, "pred_n44_s2"] = np.clip(np.sum([w[i] * sub[f"{models[i]}_p44"].values for i in range(5)], axis=0), 0, None)
         df.loc[idx, "pred_n70_s2"] = np.clip(np.sum([w[i] * sub[f"{models[i]}_p70"].values for i in range(5)], axis=0), 0, None)
@@ -70,7 +78,12 @@ def run_evaluation():
         )
         .reset_index()
     )
-    company_eval["Ti_Le_Lech_%"] = (company_eval["Chenh_Lech"] / company_eval["Tien_Thuc_Te"]) * 100
+    company_eval["Ti_Le_Lech_%"] = np.divide(
+        company_eval["Chenh_Lech"] * 100,
+        company_eval["Tien_Thuc_Te"],
+        out=np.zeros(len(company_eval), dtype=float),
+        where=company_eval["Tien_Thuc_Te"] != 0,
+    )
 
     print(company_eval.to_string(index=False, formatters={
         "Tien_Thuc_Te": "{:,.0f} đ".format,
@@ -103,8 +116,20 @@ def run_evaluation():
         )
         .reset_index()
     )
-    segment_eval["WAPE_%"] = (
-        df.groupby("segment").apply(lambda g: np.sum(g["abs_error_cost"]) / (np.sum(g["actual_cost"]) + 1e-5) * 100).values
+    segment_wape = (
+        df.groupby("segment", sort=False)
+        .agg(abs_error=("abs_error_cost", "sum"), actual=("actual_cost", "sum"))
+    )
+    segment_wape["WAPE_%"] = np.divide(
+        segment_wape["abs_error"] * 100,
+        segment_wape["actual"],
+        out=np.zeros(len(segment_wape), dtype=float),
+        where=segment_wape["actual"] != 0,
+    )
+    segment_eval = segment_eval.merge(
+        segment_wape[["WAPE_%"]].reset_index(),
+        on="segment",
+        how="left",
     )
 
     print(segment_eval.to_string(index=False, formatters={

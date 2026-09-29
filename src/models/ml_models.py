@@ -21,7 +21,12 @@ def calculate_metrics(y_true_n44, y_true_n70, y_pred_n44, y_pred_n70):
 
     mae_cost = np.mean(np.abs(cost_true - cost_pred))
     rmse_cost = np.sqrt(np.mean((cost_true - cost_pred) ** 2))
-    wape_cost = np.sum(np.abs(cost_true - cost_pred)) / np.sum(cost_true) * 100
+    total_cost = np.sum(cost_true)
+    wape_cost = (
+        np.sum(np.abs(cost_true - cost_pred)) / total_cost * 100
+        if total_cost > 0
+        else 0.0
+    )
 
     mae_n44 = np.mean(np.abs(y_true_n44 - y_pred_n44))
     mae_n70 = np.mean(np.abs(y_true_n70 - y_pred_n70))
@@ -55,8 +60,8 @@ def train_predict_m1_rf(X_tr, y_tr_44, y_tr_70, X_te):
     bst_44 = lgb.train(params_rf, dtrain_44, num_boost_round=100)
     bst_70 = lgb.train(params_rf, dtrain_70, num_boost_round=100)
 
-    p44 = bst_44.predict(X_te)
-    p70 = bst_70.predict(X_te)
+    p44 = np.asarray(bst_44.predict(X_te), dtype=np.float64)
+    p70 = np.asarray(bst_70.predict(X_te), dtype=np.float64)
     return p44, p70
 
 
@@ -89,8 +94,8 @@ def train_predict_m2_lgb(X_tr, y_tr_44, y_tr_70, X_te):
     bst_44 = lgb.train(params_44, dtrain_44, num_boost_round=250)
     bst_70 = lgb.train(params_70, dtrain_70, num_boost_round=250)
 
-    p44 = bst_44.predict(X_te)
-    p70 = bst_70.predict(X_te)
+    p44 = np.asarray(bst_44.predict(X_te), dtype=np.float64)
+    p70 = np.asarray(bst_70.predict(X_te), dtype=np.float64)
     return p44, p70
 
 
@@ -117,8 +122,8 @@ def train_predict_m3_catboost(X_tr, y_tr_44, y_tr_70, X_te):
     cb_44.fit(X_tr, y_tr_44)
     cb_70.fit(X_tr, y_tr_70)
 
-    p44 = cb_44.predict(X_te)
-    p70 = cb_70.predict(X_te)
+    p44 = np.asarray(cb_44.predict(X_te), dtype=np.float64)
+    p70 = np.asarray(cb_70.predict(X_te), dtype=np.float64)
     return p44, p70
 
 

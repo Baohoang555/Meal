@@ -17,7 +17,12 @@ def calculate_metrics(y_true_n44, y_true_n70, y_pred_n44, y_pred_n70):
 
     mae_cost = np.mean(np.abs(cost_true - cost_pred))
     rmse_cost = np.sqrt(np.mean((cost_true - cost_pred) ** 2))
-    wape_cost = np.sum(np.abs(cost_true - cost_pred)) / np.sum(cost_true) * 100
+    total_cost = np.sum(cost_true)
+    wape_cost = (
+        np.sum(np.abs(cost_true - cost_pred)) / total_cost * 100
+        if total_cost > 0
+        else 0.0
+    )
 
     mae_n44 = np.mean(np.abs(y_true_n44 - y_pred_n44))
     mae_n70 = np.mean(np.abs(y_true_n70 - y_pred_n70))
@@ -43,6 +48,26 @@ def optimize_e1_weight(p_a_44, p_a_70, p_b_44, p_b_70, y44, y70):
 
     res = minimize(loss, [0.5], bounds=[(0.0, 1.0)], method="L-BFGS-B")
     return float(res.x[0])
+
+
+def fit_convex_weights(cost_matrix, y_cost):
+    """Fit non-negative weights using only predictions from prior periods."""
+    if len(y_cost) == 0:
+        return np.full(cost_matrix.shape[1], 1.0 / cost_matrix.shape[1])
+
+    def loss(weights):
+        return np.mean(np.abs(y_cost - cost_matrix @ weights))
+
+    result = minimize(
+        loss,
+        np.full(cost_matrix.shape[1], 1.0 / cost_matrix.shape[1]),
+        method="SLSQP",
+        bounds=[(0.0, 1.0)] * cost_matrix.shape[1],
+        constraints={"type": "eq", "fun": lambda weights: np.sum(weights) - 1.0},
+    )
+    if not result.success:
+        return np.full(cost_matrix.shape[1], 1.0 / cost_matrix.shape[1])
+    return result.x
 
 
 def run_ensemble():
@@ -93,7 +118,18 @@ def run_ensemble():
             e0_metrics_list.append(res_e0)
 
             # --- E1: Weighted Average ---
-            w_opt = optimize_e1_weight(pa_44, pa_70, pb_44, pb_70, y44, y70)
+            prior = df[df["month"] < m]
+            if prior.empty:
+                w_opt = 0.5
+            else:
+                w_opt = optimize_e1_weight(
+                    prior[f"{m_a}_p44"].values,
+                    prior[f"{m_a}_p70"].values,
+                    prior[f"{m_b}_p44"].values,
+                    prior[f"{m_b}_p70"].values,
+                    prior["N44"].values,
+                    prior["N70"].values,
+                )
             p_e1_44 = w_opt * pa_44 + (1 - w_opt) * pb_44
             p_e1_70 = w_opt * pa_70 + (1 - w_opt) * pb_70
             res_e1 = calculate_metrics(y44, y70, p_e1_44, p_e1_70)
@@ -146,23 +182,20 @@ def run_ensemble():
         res_s0["Method"] = "S0 (All 5 Simple Avg)"
         multi_results.append(res_s0)
 
-        # S2: Tối ưu lồi Non-Negative Least Squares trên cả 5 mô hình
-        cost_matrix = np.column_stack([
-            sub[f"{mod}_p44"].values * PRICE_44 + sub[f"{mod}_p70"].values * PRICE_70
+        # S2: trọng số học từ các tháng trước, không dùng nhãn của tháng đang test.
+        prior = df[df["month"] < m]
+        prior_cost_matrix = np.column_stack([
+            prior[f"{mod}_p44"].values * PRICE_44 + prior[f"{mod}_p70"].values * PRICE_70
             for mod in models
-        ])
+        ]) if not prior.empty else np.empty((0, len(models)))
+        prior_cost = (
+            prior["N44"].values * PRICE_44 + prior["N70"].values * PRICE_70
+            if not prior.empty else np.array([])
+        )
+        weights = fit_convex_weights(prior_cost_matrix, prior_cost)
 
-        def loss_multi(w):
-            pred = cost_matrix @ w
-            return np.mean(np.abs(y_cost - pred))
-
-        # Ràng buộc sum(w) = 1, w_i >= 0
-        cons = {"type": "eq", "fun": lambda w: np.sum(w) - 1.0}
-        bounds = [(0.0, 1.0) for _ in range(5)]
-        opt_s2 = minimize(loss_multi, [0.2] * 5, method="SLSQP", bounds=bounds, constraints=cons)
-
-        p_s2_44 = np.sum([opt_s2.x[i] * sub[f"{models[i]}_p44"].values for i in range(5)], axis=0)
-        p_s2_70 = np.sum([opt_s2.x[i] * sub[f"{models[i]}_p70"].values for i in range(5)], axis=0)
+        p_s2_44 = np.sum([weights[i] * sub[f"{models[i]}_p44"].values for i in range(5)], axis=0)
+        p_s2_70 = np.sum([weights[i] * sub[f"{models[i]}_p70"].values for i in range(5)], axis=0)
         res_s2 = calculate_metrics(y44, y70, p_s2_44, p_s2_70)
         res_s2["Method"] = "S2 (5-Model Convex Opt)"
         multi_results.append(res_s2)
