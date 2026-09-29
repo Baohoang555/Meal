@@ -11,21 +11,23 @@ Chi phí = N44 × 44.000 + N70 × 70.000
 
 Trong đó `N44` là số bữa Việt + Chay và `N70` là số bữa Âu.
 
-Kết quả chính:
+Kết quả hiện tại sau khi loại bỏ feature rò rỉ target:
 
-- Mô hình DL tốt nhất trong các kết quả đã xuất là **M4-GRU**:
-  - MAE chi phí: **4.697 đ / employee-month**
-  - RMSE chi phí: **17.364 đ**
-  - WAPE: **0,669%**
-- Ensemble đa mô hình S2 đạt:
-  - MAE chi phí: **7.764 đ**
-  - RMSE chi phí: **16.965 đ**
-  - WAPE: **1,022%**
-- Trong các baseline, **Ridge** tốt nhất theo MAE chi phí:
-  - MAE: **201.360 đ**
-  - WAPE: **31,309%**
-- Dự báo ngân sách toàn công ty trong ba tháng test lệch từ
-  **-0,765% đến +0,146%**.
+- ML tốt nhất theo MAE là **CatBoost**: MAE chi phí **189.586 đ**,
+  RMSE **234.600 đ**, WAPE **29,803%**.
+- DL tốt nhất theo MAE là **MLP**: MAE chi phí **195.767 đ**,
+  RMSE **241.624 đ**, WAPE **30,509%**.
+- Baseline tốt nhất theo MAE là **Ridge**: MAE chi phí **201.360 đ**,
+  RMSE **241.608 đ**, WAPE **31,309%**.
+- Ensemble S2 đạt MAE chi phí **193.146 đ**, RMSE **236.388 đ**,
+  WAPE **30,212%**.
+- Sai lệch tổng ngân sách trên evaluation cohort hiện tại là **-9,147%**
+  (2026-07), **+4,263%** (2026-08) và **+54,515%** (2026-09).
+
+Kết quả trước đây có MAE chỉ vài nghìn đồng được tạo ra khi mô hình còn nhận
+feature `expected_amount`/`amount_diff` tính từ target tháng hiện tại. Đó là
+target leakage, không phải hiệu năng dự báo hợp lệ; các kết quả cũ không được
+dùng làm căn cứ triển khai.
 
 > Lưu ý: số liệu trong báo cáo được đọc từ các file kết quả hiện có trong
 > `results/metrics`. Sau khi chạy lại toàn bộ pipeline, các con số có thể thay
@@ -99,15 +101,30 @@ làm tỷ lệ này biến động mạnh.
 Pipeline sử dụng chia theo thời gian, không random split:
 
 - Train: các tháng trước tháng test.
-- Test/backtest: tháng 2026-07, 2026-08 và 2026-09.
+- Test/backtest artifacts hiện có: tháng 2026-07, 2026-08 và 2026-09.
 - Feature lag và target encoding chỉ dùng dữ liệu trước tháng cần dự báo.
 
 Feature engineering đã được điều chỉnh để:
 
 - Không dùng `au_share` của chính tháng mục tiêu.
+- Không dùng `expected_amount`/`amount_diff`, là các giá trị dẫn xuất trực tiếp
+  từ `N44`/`N70` của tháng mục tiêu.
 - Chỉ giữ dòng có đủ lag 1, 2 và 3 tháng.
 - Tính ngày làm việc có loại ngày lễ cấu hình.
 - Dùng target encoding phòng ban dạng expanding theo thời gian.
+
+### Cảnh báo về tháng 2026-09 chưa hoàn chỉnh
+
+Daily grid hiện chỉ có dữ liệu đến **2026-09-21**, nhưng prediction/evaluation
+đang so sánh dự báo tổng của cả tháng với tổng thực tế tính đến ngày 21. Do đó
+tháng 9 chưa phải một fold test hợp lệ cho dự báo cả tháng. Sai lệch +54,515%
+không thể diễn giải là sai số forecast tháng đầy đủ: thực tế tháng đang bị
+right-censored (thiếu 9 ngày lịch cuối tháng). Cần nạp đủ log tháng 9 rồi chạy
+lại evaluation, hoặc loại tháng này khỏi thống kê backtest.
+
+Các summary ML/DL/ensemble hiện trung bình kết quả các tháng test sẵn có, gồm
+cả tháng 9 chưa đủ dữ liệu; vì vậy các chỉ số tổng hợp dưới đây chỉ là kết quả
+tham khảo cho artifact hiện tại, chưa phải kết luận hiệu năng production.
 
 ## 4. Kết quả baseline
 
@@ -130,13 +147,12 @@ Nguồn: [`results/metrics/ml_models_summary.csv`](results/metrics/ml_models_sum
 
 | Mô hình | MAE chi phí | RMSE chi phí | WAPE | MAE N44 | MAE N70 |
 |---|---:|---:|---:|---:|---:|
-| CatBoost | 11.293 đ | 34.133 đ | 1,573% | 0,371 | 0,129 |
-| LightGBM | 12.186 đ | 26.431 đ | 1,707% | 0,369 | 0,136 |
-| Random Forest | 39.308 đ | 54.653 đ | 6,031% | 0,975 | 0,173 |
+| CatBoost | **189.586 đ** | 234.600 đ | 29,803% | 4,213 | 0,211 |
+| LightGBM | 191.133 đ | **234.239 đ** | **29,699%** | 4,256 | **0,209** |
+| Random Forest | 194.189 đ | 235.671 đ | 30,116% | 4,306 | 0,255 |
 
-CatBoost có MAE thấp nhất trong nhóm ML. LightGBM có RMSE thấp hơn CatBoost,
-cho thấy sai số trung bình tốt nhưng vẫn có một số lỗi lớn hơn theo MAE tuyệt
-đối.
+CatBoost có MAE thấp nhất trong nhóm ML; LightGBM có RMSE và WAPE thấp hơn một
+chút. Chênh lệch nhỏ và summary có bao gồm fold tháng 9 chưa hoàn chỉnh.
 
 ## 6. Kết quả DL
 
@@ -144,12 +160,12 @@ Nguồn: [`results/metrics/dl_models_summary.csv`](results/metrics/dl_models_sum
 
 | Mô hình | MAE chi phí | RMSE chi phí | WAPE | MAE N44 | MAE N70 |
 |---|---:|---:|---:|---:|---:|
-| GRU | **4.697 đ** | 17.364 đ | **0,669%** | 0,246 | 0,149 |
-| MLP | 11.702 đ | 17.737 đ | 1,607% | 0,436 | 0,175 |
+| MLP | **195.767 đ** | 241.624 đ | **30,509%** | **4,349** | 0,236 |
+| GRU | 217.041 đ | **258.494 đ** | 34,157% | 4,824 | **0,228** |
 
-GRU là mô hình tốt nhất theo MAE chi phí và WAPE trong các kết quả hiện có.
-Kết quả này cần được xác nhận lại sau khi chạy lại toàn bộ pipeline với cùng
-artifact feature và cùng môi trường.
+MLP tốt hơn GRU theo MAE chi phí và WAPE; GRU có MAE N70 thấp hơn. Cả hai mô hình
+DL hiện không vượt baseline Ridge theo MAE chi phí. Kết luận trước đây rằng GRU
+là mô hình tốt nhất là không còn đúng sau khi loại bỏ leakage.
 
 ## 7. Kết quả ensemble
 
@@ -159,12 +175,12 @@ Nguồn: [`results/metrics/ensemble_pairs_summary.csv`](results/metrics/ensemble
 
 | Cấu hình | MAE chi phí | RMSE chi phí | WAPE |
 |---|---:|---:|---:|
-| GRU + MLP, E1 | **5.509 đ** | 13.605 đ | 0,755% |
-| LightGBM + GRU, E1 | 5.592 đ | 15.104 đ | 0,780% |
-| CatBoost + GRU, E1 | 5.690 đ | 19.718 đ | 0,778% |
+| LightGBM + CatBoost, E0 | **189.521 đ** | **233.254 đ** | **29,628%** |
+| Random Forest + CatBoost, E0 | 190.457 đ | 233.356 đ | 29,752% |
+| CatBoost + MLP, E1 | 191.395 đ | 236.001 đ | 30,011% |
 
-E1 là weighted average. Trọng số phải được học từ các tháng trước, không dùng
-target của chính tháng đang đánh giá.
+Trong bảng hiện tại, E0 là trung bình đơn giản. E1 là weighted average; trọng số
+cần được học từ các tháng trước, không dùng target của chính tháng đang đánh giá.
 
 ### 7.2. Ensemble năm mô hình
 
@@ -172,11 +188,11 @@ Nguồn: [`results/metrics/ensemble_multi_summary.csv`](results/metrics/ensemble
 
 | Phương pháp | MAE chi phí | RMSE chi phí | WAPE |
 |---|---:|---:|---:|
-| S0 - trung bình đều | 11.617 đ | 17.688 đ | 1,694% |
-| S2 - convex optimization | **7.764 đ** | **16.965 đ** | **1,022%** |
+| S0 - trung bình đều | 194.939 đ | 237.184 đ | 30,498% |
+| S2 - convex optimization | **193.146 đ** | **236.388 đ** | **30,212%** |
 
-S2 tốt hơn S0, nhưng vẫn kém cặp GRU + MLP E1 và mô hình GRU đơn lẻ theo MAE.
-Không nên mặc định rằng thêm nhiều mô hình sẽ luôn cải thiện kết quả.
+S2 chỉ cải thiện nhẹ so với S0 và vẫn kém baseline Ridge theo MAE chi phí.
+Không nên mặc định rằng ensemble nhiều mô hình sẽ luôn cải thiện kết quả.
 
 ## 8. Độ chính xác ngân sách toàn công ty
 
@@ -184,29 +200,33 @@ Nguồn: [`results/metrics/company_budget_eval.csv`](results/metrics/company_bud
 
 | Tháng | Chi phí thực tế | Dự báo | Sai lệch | Sai lệch % |
 |---|---:|---:|---:|---:|
-| 2026-07 | 1.299.814.000 đ | 1.289.873.000 đ | -9.941.000 đ | -0,765% |
-| 2026-08 | 1.194.892.000 đ | 1.196.634.000 đ | +1.742.000 đ | +0,146% |
-| 2026-09 | 778.952.000 đ | 778.437.000 đ | -515.000 đ | -0,066% |
+| 2026-07 | 1.299.814.000 đ | 1.180.916.555 đ | -118.897.445 đ | -9,147% |
+| 2026-08 | 1.194.892.000 đ | 1.245.831.339 đ | +50.939.339 đ | +4,263% |
+| 2026-09* | 778.952.000 đ | 1.203.597.983 đ | +424.645.983 đ | +54,515% |
 
-Ở cấp công ty, sai lệch ngân sách khá thấp. Đây là kết quả phù hợp cho hoạch
-định ngân sách tổng, nhưng không có nghĩa mọi cá nhân đều được dự báo chính xác.
+*Tháng 9 chỉ có dữ liệu đến 21/09, không phải tổng thực tế cả tháng. Vì vậy
+không dùng fold này để kết luận độ chính xác forecast tháng. Tháng 7 và 8 trong
+evaluation cohort lần lượt lệch -9,147% và +4,263%; các kết quả này cũng cần
+được so với baseline trên đúng cùng cohort.
 
 ## 9. Sai số theo nhóm hành vi
 
 Nguồn: [`results/metrics/segment_eval.csv`](results/metrics/segment_eval.csv).
 
-| Nhóm | Số lượng | MAE chi phí | WAPE |
-|---|---:|---:|---:|
-| Không ăn | 79 | 5.552 đ | 0%* |
-| Ăn ít dưới 300k | 313 | 7.556 đ | 5,489% |
-| Ăn vừa 300k-800k | 2.062 | 5.239 đ | 0,881% |
-| Ăn nhiều từ 800k | 2.030 | 10.439 đ | 1,057% |
+| Nhóm | Số lượng | MAE chi phí | RMSE chi phí | WAPE |
+|---|---:|---:|---:|---:|
+| Không ăn | 79 | 110.572 đ | 229.219 đ | Không xác định* |
+| Ăn ít dưới 300k | 313 | 301.550 đ | 400.644 đ | 219,083% |
+| Ăn vừa 300k-800k | 2.062 | 251.467 đ | 284.431 đ | 42,304% |
+| Ăn nhiều từ 800k | 2.030 | 119.694 đ | 154.754 đ | 12,119% |
 
-`WAPE = 0%*` ở nhóm không ăn là do tổng chi phí thực tế của nhóm bằng 0, không
-phải dự báo hoàn hảo. Thực tế nhóm này vẫn có dự báo dư khoảng 438.634 đ.
+WAPE của nhóm không ăn không xác định vì tổng chi phí thực tế bằng 0; giá trị
+0 trong CSV là quy ước khi mẫu số bằng 0, không phải dự báo hoàn hảo. Tổng dự
+báo dư của nhóm này là khoảng **8.735.186 đ**.
 
-Nhóm ăn ít có WAPE cao vì mẫu số chi phí thực tế nhỏ. Nhóm ăn nhiều có MAE tiền
-cao nhất do quy mô chi tiêu lớn hơn.
+Các sai số theo segment lớn hơn đáng kể so với báo cáo cũ. Nhóm ăn ít có WAPE
+cao một phần vì mẫu số thực tế nhỏ; tháng test chưa hoàn chỉnh cũng ảnh hưởng
+phân đoạn theo chi tiêu thực tế.
 
 ## 10. Ngoại lệ lớn
 
@@ -220,41 +240,3 @@ Các ngoại lệ lớn thường rơi vào một trong các trường hợp:
 
 Các dòng chi tiết được giữ trong file `top_outliers.csv`; cần ẩn danh mã nhân
 viên trước khi đưa báo cáo ra ngoài project.
-
-## 11. Đánh giá tổng thể và giới hạn
-
-### Điểm đạt được
-
-1. Pipeline đã có làm sạch dữ liệu, daily grid, monthly aggregation, feature
-   engineering, baseline, ML, DL, ensemble và evaluation.
-2. Chia dữ liệu theo thời gian, phù hợp hơn random split cho bài toán dự báo.
-3. Đã loại bỏ target leakage từ `au_share` tháng hiện tại.
-4. Đã có kiểm tra giá: 0 bản ghi lệch giá 44.000/70.000.
-5. Dự báo ngân sách cấp công ty có sai lệch dưới 1% ở cả ba tháng test.
-
-### Giới hạn cần ghi rõ
-
-1. Chỉ có ba tháng test, nên chưa đủ để kết luận ổn định dài hạn.
-2. 10% nhân viên có tenure dưới 90 ngày; cold-start vẫn là vấn đề.
-3. Món Âu chỉ chiếm 1,6%, khiến N70 khó đánh giá ổn định.
-4. Kết quả DL tốt cần được tái lập sau khi chạy lại pipeline hoàn toàn.
-5. Dữ liệu chỉ phản ánh chi tiêu tại căn-tin, không phải tổng chi phí ăn uống
-   thực tế của nhân viên.
-6. Danh sách ngày lễ hiện vẫn cần được đối chiếu với lịch chính thức của công ty.
-7. Dự báo số bữa là số thực liên tục; nếu cần vận hành theo số suất, cần thêm
-   bước làm tròn và đánh giá lại sai số sau làm tròn.
-
-## 12. Khuyến nghị triển khai
-
-1. Chạy lại toàn bộ pipeline để sinh đồng bộ feature và prediction mới.
-2. Dùng GRU hoặc GRU + MLP E1 làm ứng viên chính, nhưng giữ Ridge làm baseline
-   giám sát.
-3. Theo dõi riêng:
-   - người không ăn;
-   - người mới;
-   - nhóm có món Âu;
-   - nhân viên có sai số lớn.
-4. Mở rộng backtest lên nhiều tháng hơn trước khi dùng cho quyết định tài chính.
-5. Với ngân sách công ty, theo dõi thêm sai lệch tổng tiền theo tháng; với vận hành
-   bếp, theo dõi thêm sai số N44 và N70 riêng biệt.
-

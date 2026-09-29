@@ -66,7 +66,15 @@ def build_features(
 
     # Không dùng au_share của chính tháng hiện tại làm feature: nó được tính
     # từ N70 của target và sẽ làm rò rỉ nhãn vào mô hình.
-    df.drop(columns=["au_share"], inplace=True, errors="ignore")
+    #
+    # QUAN TRỌNG: "expected_amount" và "amount_diff" (tạo ở monthly_aggregation.py)
+    # được tính trực tiếp từ N44/N70 CỦA CHÍNH THÁNG ĐANG DỰ ĐOÁN
+    # (expected_amount = N44*44000 + N70*70000), tức gần như CHÍNH LÀ đáp án
+    # (amount_diff luôn bằng 0 vì không có bản ghi lệch giá). Nếu không loại,
+    # đây là rò rỉ nhãn nghiêm trọng nhất trong toàn bộ pipeline — kiểm chứng
+    # thực nghiệm cho thấy feature này chiếm >99% gain importance của LightGBM
+    # và làm MAE thấp giả tạo gấp ~10 lần so với khi loại bỏ đúng cách.
+    df.drop(columns=["au_share", "expected_amount", "amount_diff"], inplace=True, errors="ignore")
 
     # 4. TARGET ENCODING EXPANDING (Theo phòng ban - Tránh rò rỉ dữ liệu)
     if "department" in df.columns:

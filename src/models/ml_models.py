@@ -132,10 +132,14 @@ def run_ml_pipeline(features_path="data/processed/features_monthly.parquet"):
     df = pd.read_parquet(features_path)
     df["month"] = pd.PeriodIndex(df["month"], freq="M")
 
-    # Loại bỏ các cột định danh, nhãn và văn bản
+    # Loại bỏ các cột định danh, nhãn và văn bản.
+    # "expected_amount"/"amount_diff" được liệt kê phòng trường hợp chạy trên
+    # một file features_monthly.parquet cũ (sinh ra trước khi sửa
+    # feature_engineering.py) còn sót 2 cột rò rỉ nhãn này.
     drop_cols = [
         "employee_id", "month", "department", "N44", "N70",
-        "total_meals", "total_amount", "days_with_meal", "calendar_days"
+        "total_meals", "total_amount", "days_with_meal", "calendar_days",
+        "expected_amount", "amount_diff",
     ]
     feature_cols = [c for c in df.columns if c not in drop_cols]
     

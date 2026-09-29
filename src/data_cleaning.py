@@ -56,10 +56,21 @@ SHIFT_MAP = {
 # Danh sách ngày lễ VN — PLACEHOLDER, cần thay bằng lịch nghỉ chính thức
 # của công ty cho đúng khoảng thời gian dữ liệu thật.
 PUBLIC_HOLIDAYS = pd.to_datetime([
+    # --- 2025 ---
     "2025-01-01",
     "2025-01-28", "2025-01-29", "2025-01-30", "2025-01-31", "2025-02-01", "2025-02-02", "2025-02-03",
     "2025-04-30", "2025-05-01",
     "2025-09-02",
+    # --- 2026 --- (theo Thông báo 9441/TB-BNV, Bộ Nội vụ, 16/10/2025 — vẫn
+    # cần đối chiếu với lịch nghỉ CHÍNH THỨC của công ty, vì doanh nghiệp
+    # được quyền tự quyết định lịch nghỉ Tết/Quốc khánh khác khối nhà nước)
+    "2026-01-01",                                                          # Tết Dương lịch
+    "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18",  # Tết Bính Ngọ
+    "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22",
+    "2026-04-26", "2026-04-27",                                            # Giỗ Tổ Hùng Vương (+nghỉ bù)
+    "2026-04-30", "2026-05-01", "2026-05-02", "2026-05-03",                # 30/4 - 1/5 (kỳ nghỉ dài)
+    "2026-08-31", "2026-09-01", "2026-09-02",                              # Quốc khánh — NGUỒN CÒN CHÊNH
+    # LỆCH: một số nguồn báo nghỉ từ 29/8, cần xác nhận lại với lịch công ty.
 ])
 
 _PAREN_RE = re.compile(r"\(([^)]+)\)")
@@ -293,4 +304,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run(args.input, args.output, args.removed_log)
-    

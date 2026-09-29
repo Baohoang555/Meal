@@ -214,9 +214,13 @@ def run_dl_pipeline(features_path="data/processed/features_monthly.parquet"):
     df = pd.read_parquet(features_path)
     df["month"] = pd.PeriodIndex(df["month"], freq="M")
 
+    # "expected_amount"/"amount_diff" liệt kê phòng trường hợp chạy trên file
+    # features_monthly.parquet cũ còn sót 2 cột rò rỉ nhãn (xem
+    # feature_engineering.py để biết chi tiết vì sao đây là rò rỉ nghiêm trọng).
     drop_cols = [
         "employee_id", "month", "department", "N44", "N70",
-        "total_meals", "total_amount", "days_with_meal", "calendar_days"
+        "total_meals", "total_amount", "days_with_meal", "calendar_days",
+        "expected_amount", "amount_diff",
     ]
     numeric_feature_cols = [
         c for c in df.select_dtypes(include=[np.number]).columns if c not in drop_cols
@@ -252,6 +256,7 @@ def run_dl_pipeline(features_path="data/processed/features_monthly.parquet"):
 
         # Trích xuất dạng Sequence 3 tháng cho GRU: [lag_3, lag_2, lag_1]
         step_features = ["N44_lag_", "N70_lag_", "total_meals_lag_", "days_with_meal_lag_", "total_amount_lag_"]
+        sequence_cols = {f"{f}{step}" for f in step_features for step in [1, 2, 3]}
         seq_train = np.stack(
             [
                 train_df[[f"{f}{step}" for f in step_features]].fillna(0).values
@@ -273,8 +278,20 @@ def run_dl_pipeline(features_path="data/processed/features_monthly.parquet"):
         seq_train_norm = (seq_train - seq_mean) / seq_std
         seq_test_norm = (seq_test - seq_mean) / seq_std
 
-        static_train_norm = X_tr_scaled[:, :10]
-        static_test_norm = X_te_scaled[:, :10]
+        # LỖI ĐÃ SỬA: bản cũ lấy `X_tr_scaled[:, :10]` — tức 10 CỘT ĐẦU TIÊN
+        # theo VỊ TRÍ trong numeric_feature_cols, không phải theo TÊN cột.
+        # Vị trí này phụ thuộc hoàn toàn vào thứ tự cột trong DataFrame, có
+        # thể đổi bất cứ khi nào feature_engineering.py thêm/bớt một cột ở
+        # phía trước — khiến "static features" đưa vào GRU là ngẫu nhiên,
+        # không tái lập được, và có thể vô tình lẫn cả cột rò rỉ nhãn nếu cột
+        # đó nằm sớm trong thứ tự cột (đây chính xác là điều đã xảy ra với
+        # "expected_amount"). Sửa lại: chọn "static" là mọi đặc trưng KHÔNG
+        # nằm trong chuỗi 3 bước đưa vào GRU, chọn theo TÊN cột, rồi lấy đúng
+        # cột đó từ ma trận đã chuẩn hóa X_tr_scaled/X_te_scaled.
+        static_cols = [c for c in numeric_feature_cols if c not in sequence_cols]
+        static_idx = [numeric_feature_cols.index(c) for c in static_cols]
+        static_train_norm = X_tr_scaled[:, static_idx]
+        static_test_norm = X_te_scaled[:, static_idx]
 
         print(f"\n--> Đang huấn luyện Fold: {test_m}")
 
