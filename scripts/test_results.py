@@ -106,10 +106,18 @@ def main() -> int:
     print("PASS: artifacts tồn tại và đọc được")
     print(f"PASS: monthly rows={len(monthly):,}, features rows={len(features):,}")
     print(f"PASS: prediction rows ML={len(ml_preds):,}, DL={len(dl_preds):,}")
-    print(f"BEST BASELINE: {baseline.loc[baseline['MAE_Cost'].idxmin(), 'Model']}")
-    print(f"BEST ML: {ml.loc[ml['MAE_Cost'].idxmin(), 'Model']}")
-    print(f"BEST DL: {dl.loc[dl['MAE_Cost'].idxmin(), 'Model']}")
-    print(f"BEST ENSEMBLE: {ensemble.loc[ensemble['MAE_Cost'].idxmin(), 'Method']}")
+    best_baseline = str(
+        baseline.sort_values("MAE_Cost", kind="stable").iloc[0]["Model"]
+    )
+    best_ml = str(ml.sort_values("MAE_Cost", kind="stable").iloc[0]["Model"])
+    best_dl = str(dl.sort_values("MAE_Cost", kind="stable").iloc[0]["Model"])
+    best_ensemble = str(
+        ensemble.sort_values("MAE_Cost", kind="stable").iloc[0]["Method"]
+    )
+    print(f"BEST BASELINE: {best_baseline}")
+    print(f"BEST ML: {best_ml}")
+    print(f"BEST DL: {best_dl}")
+    print(f"BEST ENSEMBLE: {best_ensemble}")
     print(
         "BUDGET MAX ABS ERROR: "
         f"{budget['Ti_Le_Lech_%'].abs().max():.3f}%"
