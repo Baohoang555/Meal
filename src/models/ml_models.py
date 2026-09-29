@@ -242,3 +242,4 @@ def run_ml_pipeline(features_path="data/processed/features_monthly.parquet"):
 
 if __name__ == "__main__":
     run_ml_pipeline()
+    
