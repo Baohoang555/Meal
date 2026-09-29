@@ -1,4 +1,6 @@
-"""Kiểm tra nhanh toàn bộ artifact kết quả của project.
+"""# Dự đoán tiền ăn hàng tháng của nhân viên
+
+Kiểm tra nhanh toàn bộ artifact kết quả của project.
 
 Chạy từ thư mục gốc:
     python scripts/test_results.py
